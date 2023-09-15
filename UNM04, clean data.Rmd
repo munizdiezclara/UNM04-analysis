@@ -1,0 +1,171 @@
+---
+title: "UNM04"
+output: pdf_document
+date: "2023-07-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(afex)
+library(BayesFactor)
+library(apa)
+library(emmeans)
+library("writexl")
+load("C:/Users/munizdie/OneDrive - Lancaster University/Experiments/Recognition memory/UNM04-main/UNM04_proc_data.RData")
+```
+
+Some cleaning: identify how many people respond lower than by chance, maybe using t test
+
+```{r}
+acc_last_block <- filter(training, block == 4) %>%
+  group_by(pNum, condition) %>%
+   summarise(mean_accuracy = mean(prob_response, na.rm = TRUE), sd = sd(prob_response, na.rm = TRUE))
+distribution_acc_training <- select(acc_last_block, c("pNum","condition", "mean_accuracy"))
+distribution_acc_training <- distribution_acc_training %>% 
+  group_by(condition) %>% 
+  count(mean_accuracy)
+ggplot(distribution_acc_training)+
+  geom_point(mapping = aes(x = mean_accuracy, y = n, color = condition))#+
+  #coord_cartesian(ylim = c(0,10))
+```
+
+
+```{r}
+acc_test <- test %>%
+  group_by (pNum, condition, predictiveness) %>%
+  summarise(acc = mean(acc, na.rm = TRUE))
+distribution_acc_test <- select(acc_test, c("pNum","condition", "predictiveness", "acc"))
+distribution_acc_test <- distribution_acc_test %>% 
+  group_by(condition) %>% 
+  count(acc)
+ggplot(distribution_acc_test)+
+  geom_point(mapping = aes(x = acc, y = n, color = condition))#+
+  #coord_cartesian(ylim = c(0,10))
+
+  
+```
+
+```{r}
+good_acc_training <- filter(acc_last_block, (condition == "uncertain" & mean_accuracy >= 0.65) | (condition == "certain" & mean_accuracy >= 0.75))
+test <- filter(test, pNum %in% good_acc_training$pNum)
+#good_acc_test <- acc_test %>%
+#  group_by(pNum) %>%
+#  summarise(acc = mean(acc)) %>%
+#  filter(acc >= 0.75)
+#test <- filter(test, pNum %in% good_acc_test$pNum)
+```
+
+```{r}
+#plot test accuracy
+m_acc_test <- test %>%
+  group_by(cue_type) %>%
+  summarise(mean_acc = mean(acc, na.rm = TRUE), 
+            sd_acc = sd(acc, na.rm = TRUE)/sqrt(length(acc)))
+ggplot(data = m_acc_test) +
+  geom_col(mapping = aes(x = cue_type, y = mean_acc)) +
+  geom_errorbar(aes(x = cue_type, y= mean_acc, ymin = mean_acc - sd_acc, ymax = mean_acc + sd_acc)) +
+  coord_cartesian(ylim = c(0, 1))+
+  scale_x_discrete (name = "Type of cue") +
+  scale_y_continuous(name = "Accuracy") +
+  labs(title = "Figure 2", subtitle = "Mean accuracy for each type of cue in test phase")
+```
+```{r}
+#ANOVA accuracy
+acc_test <- test %>%
+  group_by (pNum, condition, predictiveness) %>%
+  summarise(acc = mean(acc, na.rm = TRUE))
+acc_test$predictiveness <- factor(acc_test$predictiveness)
+acc_test$condition <- factor(acc_test$condition)
+acc_test$pNum <- factor(acc_test$pNum)
+ANOVA_acc_test <- aov_car(formula = acc ~ condition + Error(pNum*predictiveness), data = acc_test)
+print(ANOVA_acc_test)
+```
+```{r}
+bay_ANOVA_acc_test <- anovaBF(formula = acc ~ condition*predictiveness + pNum,
+        data = data.frame(acc_test),
+        whichRandom = "pNum")
+print(bay_ANOVA_acc_test)
+```
+```{r}
+bay_ANOVA_acc_test[4]/bay_ANOVA_acc_test[3]
+```
+```{r}
+#plot test mem_score
+m_mem_test <- test %>%
+  group_by(cue_type) %>%
+  summarise(mean_mem_score = mean(mem_score, na.rm = TRUE), 
+            sd_mem_score = sd(mem_score, na.rm = TRUE)/sqrt(length(mem_score)))
+ggplot(data = m_mem_test) +
+  geom_col(mapping = aes(x = cue_type, y = mean_mem_score)) +
+  geom_errorbar(aes(x = cue_type, y= mean_mem_score, ymin = mean_mem_score - sd_mem_score, ymax = mean_mem_score + sd_mem_score)) +
+  coord_cartesian(ylim = c(0, 10))+
+  scale_x_discrete (name = "Type of cue") +
+  scale_y_continuous(name = "Memory score") +
+  labs(title = "Figure 3", subtitle = "Mean memory score for each type of cue in test phase")
+```
+```{r}
+#ANOVA mem_score
+mem_score_test <- test %>%
+  group_by (pNum, condition, predictiveness) %>%
+  summarise(mem_score = mean(mem_score, na.rm = TRUE))
+mem_score_test$predictiveness <- factor(mem_score_test$predictiveness)
+mem_score_test$condition <- factor(mem_score_test$condition)
+mem_score_test$pNum <- factor(mem_score_test$pNum)
+ANOVA_mem_score_test <- aov_car(formula = mem_score ~ condition + Error(pNum*predictiveness), data = mem_score_test)
+print(ANOVA_mem_score_test)
+```
+```{r}
+bay_ANOVA_mem_score_test <- anovaBF(formula = mem_score ~ condition*predictiveness + pNum,
+        data = data.frame(mem_score_test),
+        whichRandom = "pNum")
+print(bay_ANOVA_mem_score_test)
+```
+```{r}
+bay_ANOVA_mem_score_test[4]/bay_ANOVA_mem_score_test[3]
+```
+```{r}
+#plot test mem_score but take out the errors
+c_test <- filter(test, acc == 1)
+c_m_mem_test <- c_test %>%
+  group_by(cue_type) %>%
+  summarise(mean_mem_score = mean(mem_score, na.rm = TRUE), 
+            sd_mem_score = sd(mem_score, na.rm = TRUE)/sqrt(length(mem_score)))
+ggplot(data = c_m_mem_test) +
+  geom_col(mapping = aes(x = cue_type, y = mean_mem_score)) +
+  geom_errorbar(aes(x = cue_type, y= mean_mem_score, ymin = mean_mem_score - sd_mem_score, ymax = mean_mem_score + sd_mem_score)) +
+  coord_cartesian(ylim = c(0, 10))+
+  scale_x_discrete (name = "Type of cue") +
+  scale_y_continuous(name = "Memory score") +
+  labs(title = "Figure 3", subtitle = "Mean memory score for each type of cue in test phase")
+```
+```{r}
+#ANOVA mem_score
+c_mem_score_test <- c_test %>%
+  group_by (pNum, condition, predictiveness) %>%
+  summarise(mem_score = mean(mem_score, na.rm = TRUE))
+c_mem_score_test$predictiveness <- factor(c_mem_score_test$predictiveness)
+c_mem_score_test$condition <- factor(c_mem_score_test$condition)
+c_mem_score_test$pNum <- factor(c_mem_score_test$pNum)
+c_ANOVA_mem_score_test <- aov_car(formula = mem_score ~ condition + Error(pNum*predictiveness), data = c_mem_score_test)
+print(c_ANOVA_mem_score_test)
+```
+
+```{r}
+#interaction analysis
+c_mem_score_interaction_p <- emmeans(c_ANOVA_mem_score_test, ~ predictiveness|condition)
+pairs(c_mem_score_interaction_p, adjust = "bon")
+```
+```{r}
+c_mem_test_interaction_c <- emmeans(c_ANOVA_mem_score_test, ~ condition|predictiveness)
+pairs(c_mem_test_interaction_c, adjust = "bon")
+```
+```{r}
+c_bay_ANOVA_mem_score_test <- anovaBF(formula = mem_score ~ condition*predictiveness + pNum,
+        data = data.frame(c_mem_score_test),
+        whichRandom = "pNum")
+print(c_bay_ANOVA_mem_score_test)
+```
+```{r}
+c_bay_ANOVA_mem_score_test[4]/c_bay_ANOVA_mem_score_test[3]
+```
