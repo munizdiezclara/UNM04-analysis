@@ -12,32 +12,34 @@ library(BayesFactor)
 library(apa)
 library(emmeans)
 library("writexl")
-load("C:/Users/munizdie/OneDrive - Lancaster University/Experiments/Recognition memory/UNM04-main/UNM04_proc_data.RData")
+load("C:/Users/munizdie/OneDrive - Lancaster University/Experiments/Recognition Memory/UNM04/UNM04 analysis/UNM04_proc_data.RData")
 ```
 
-The important columns that need to be taken in all data files are "participant" and "expName".
+# Design
 
-Training data start in row 6 of excel, 5 if you don't count the header, and finish in row 85, 84 if you don't count the header. The important columns here are: 
-"cue_img", (what images are each cue, basically the randomization of the images for that participant)
-"cue_order",
-"out_order",
-"cue_o_mouse.time", (basically the reaction time)
-"cue_o_mouse.clicked_name", (which outcome they have clicked)
-"correct_answer", (1 if they clicked the outcome programmed, 0 if they clicked the other)
-"training_trials.thisN", (trial number)
-"cue1",
-"cue2",
-"outcome"
+In this experiment, two groups received similar training. In this phase they were presented with 2 stimuli in each trial, one predictive of the outcome and one non-predictive. The only difference between the two group was the contingency between the predictive stimuli and the outcomes. In the certain group, the contingency was 1, that is, the predictive stimulus was always followed by a particular outcome. In the uncertain group this contingency was lowered to 0.8, so the predictive stimuli were followed by their corresponding outcome only on the 80% of the trials, and in the 20% remaining, they were followed by another outcome. after the training phase, all subjects did a recognition memory test. In each trial, they were presented with a stimulus from the previous phase and a similar but new stimulus and had to decide which one they had seen before, and then rate the confidence of their response in a scale from 1 (completely unsure) to 10 (completely sure).
 
-Test data start in row 86 (85 no header), and finish in row 93 (92 no header). The important columns here are:
-"test_mouse.time",
-"test_mouse.clicked_name",
-"slider.response" ,
-"slider.rt",
-"test.thisTrialN", (trial number)
-"target"
++-----------+----------------------------+-------------------------------------------+
+| Group     | Training                   | Test                                      |
++===========+============================+===========================================+
+| Certain   | AX - O1                    | A vs *a*                                  |
+|           |                            |                                           |
+|           | AY - O1                    | B vs *b*                                  |
+|           |                            |                                           |
+|           | BX - O2                    | X vs *x*                                  |
+|           |                            |                                           |
+|           | BY - O2                    | Y vs *y*                                  |
++-----------+----------------------------+-------------------------------------------+
+| Uncertain | 0.8 AX - O1 / 0.2 AX - O2  | A vs *a*                                  |
+|           |                            |                                           |
+|           | 0.8 AY - O1 / 0.2 AY - O2  | B vs *b*                                  |
+|           |                            |                                           |
+|           | 0.8 BX - O2 / 0.2 BX - O1  | X vs *x*                                  |
+|           |                            |                                           |
+|           | 0.8 BY - O2 / 0.2 BY - O1  | Y vs *y*                                  |
++-----------+----------------------------+-------------------------------------------+
 
-```{r}
+```{r, include = FALSE}
 training$prob_response[training$RT > 10] <- NA
 training$RT[training$RT > 10] <- NA #substitute more than 10 secs for NA
 #Plot Training accuracy
@@ -45,31 +47,37 @@ MA_training <- training %>%
   group_by(condition, block) %>%
   summarise(mean_accuracy = mean(prob_response, na.rm = TRUE), 
             sd_accuracy = sd(prob_response, na.rm = TRUE)/sqrt(length(prob_response)))
+```
+``` {r, echo = FALSE}
 ggplot(MA_training, mapping = aes(x = block, y = mean_accuracy, color = condition)) +
   geom_point() +
   geom_line() +
   geom_errorbar(aes(x= block, y = mean_accuracy, ymin = mean_accuracy-sd_accuracy, ymax = mean_accuracy+sd_accuracy), color = "black", width=.1,position=position_dodge(0.05)) +
   labs(title = "Figure 1", subtitle = "Mean corrected accuracy for the 4 blocks of the training phase")
 ```
-```{r}
+
+```{r, include = FALSE}
 #some t test to check that responding is significantly higher than chance
 mean_training <- training %>%
   group_by(pNum) %>%
    summarise(mean_response = mean(prob_response, na.rm = TRUE))
 t.test(mean_training, mu = .5, alternative = "greater") 
 ```
+
 ```{r}
 mean_cert_training <- filter(training, condition == "certain") %>%
   group_by(pNum) %>%
    summarise(mean_response = mean(prob_response, na.rm = TRUE))
-t.test(mean_cert_training, mu = .5, alternative = "greater")
+cert_t.test <- t.test(mean_cert_training, mu = .5, alternative = "greater")
 ```
+
 ```{r}
 mean_uncert_training <- filter(training, condition == "uncertain") %>%
   group_by(pNum) %>%
    summarise(mean_response = mean(prob_response, na.rm = TRUE))
-t.test(mean_uncert_training, mu = .5, alternative = "greater")
+uncert_t.test <- t.test(mean_uncert_training, mu = .5, alternative = "greater")
 ```
+
 ```{r}
 #ANOVA
 prob_resp <- training %>%
@@ -81,15 +89,18 @@ prob_resp$pNum <- factor(prob_resp$pNum)
 ANOVA_prob_resp <- aov_car(formula = mean_response ~ condition + Error(pNum/block), data = prob_resp)
 print(ANOVA_prob_resp)
 ```
+
 ```{r}
 bay_ANOVA_prob_resp <- anovaBF(formula = mean_response ~ block*condition + pNum,
         data = data.frame(prob_resp),
         whichRandom = "pNum")
 print(bay_ANOVA_prob_resp)
 ```
+
 ```{r}
 bay_ANOVA_prob_resp[4]/bay_ANOVA_prob_resp[3]
 ```
+
 ```{r}
 #plot test accuracy
 m_acc_test <- test %>%
@@ -104,6 +115,7 @@ ggplot(data = m_acc_test) +
   scale_y_continuous(name = "Accuracy") +
   labs(title = "Figure 2", subtitle = "Mean accuracy for each type of cue in test phase")
 ```
+
 ```{r}
 #ANOVA accuracy
 acc_test <- test %>%
@@ -115,15 +127,18 @@ acc_test$pNum <- factor(acc_test$pNum)
 ANOVA_acc_test <- aov_car(formula = acc ~ condition + Error(pNum*predictiveness), data = acc_test)
 print(ANOVA_acc_test)
 ```
+
 ```{r}
 bay_ANOVA_acc_test <- anovaBF(formula = acc ~ condition*predictiveness + pNum,
         data = data.frame(acc_test),
         whichRandom = "pNum")
 print(bay_ANOVA_acc_test)
 ```
+
 ```{r}
 bay_ANOVA_acc_test[4]/bay_ANOVA_acc_test[3]
 ```
+
 ```{r}
 #plot test mem_score
 m_mem_test <- test %>%
@@ -138,6 +153,7 @@ ggplot(data = m_mem_test) +
   scale_y_continuous(name = "Memory score") +
   labs(title = "Figure 3", subtitle = "Mean memory score for each type of cue in test phase")
 ```
+
 ```{r}
 #ANOVA mem_score
 mem_score_test <- test %>%
@@ -149,15 +165,18 @@ mem_score_test$pNum <- factor(mem_score_test$pNum)
 ANOVA_mem_score_test <- aov_car(formula = mem_score ~ condition + Error(pNum*predictiveness), data = mem_score_test)
 print(ANOVA_mem_score_test)
 ```
+
 ```{r}
 bay_ANOVA_mem_score_test <- anovaBF(formula = mem_score ~ condition*predictiveness + pNum,
         data = data.frame(mem_score_test),
         whichRandom = "pNum")
 print(bay_ANOVA_mem_score_test)
 ```
+
 ```{r}
 bay_ANOVA_mem_score_test[4]/bay_ANOVA_mem_score_test[3]
 ```
+
 ```{r}
 #plot test mem_score but take out the errors
 c_test <- filter(test, acc == 1)
@@ -173,6 +192,7 @@ ggplot(data = c_m_mem_test) +
   scale_y_continuous(name = "Memory score") +
   labs(title = "Figure 3", subtitle = "Mean memory score for each type of cue in test phase")
 ```
+
 ```{r}
 #ANOVA mem_score
 c_mem_score_test <- c_test %>%
@@ -184,21 +204,25 @@ c_mem_score_test$pNum <- factor(c_mem_score_test$pNum)
 c_ANOVA_mem_score_test <- aov_car(formula = mem_score ~ condition + Error(pNum*predictiveness), data = c_mem_score_test)
 print(c_ANOVA_mem_score_test)
 ```
+
 ```{r}
 #interaction analysis
 c_mem_score_interaction_p <- emmeans(c_ANOVA_mem_score_test, ~ predictiveness|condition)
 pairs(c_mem_score_interaction_p, adjust = "bon")
 ```
+
 ```{r}
 c_mem_test_interaction_c <- emmeans(c_ANOVA_mem_score_test, ~ condition|predictiveness)
 pairs(c_mem_test_interaction_c, adjust = "bon")
 ```
+
 ```{r}
 c_bay_ANOVA_mem_score_test <- anovaBF(formula = mem_score ~ condition*predictiveness + pNum,
         data = data.frame(c_mem_score_test),
         whichRandom = "pNum")
 print(c_bay_ANOVA_mem_score_test)
 ```
+
 ```{r}
 c_bay_ANOVA_mem_score_test[4]/c_bay_ANOVA_mem_score_test[3]
 ```
